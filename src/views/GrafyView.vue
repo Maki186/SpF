@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { Bar } from 'vue-chartjs'
 import {
   Chart as ChartJS,
@@ -12,16 +12,34 @@ import {
 } from 'chart.js'
 import { useFinanceStore } from '@/stores/finance'
 import { usePeriodDates } from '@/composables/useFinance'
+import PeriodRangeModal from '@/components/PeriodRangeModal.vue'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend)
 
-type ViewPeriod = 'year' | 'month' | 'week'
+type ViewPeriod = 'year' | 'month' | 'week' | 'custom'
 
 const store = useFinanceStore()
 const viewPeriod = ref<ViewPeriod>('month')
 const baseDate = ref(new Date())
+const customDateFrom = ref('')
+const customDateTo = ref('')
+const showPeriodModal = ref(false)
 
-const periodLabels: Record<ViewPeriod, string> = {
+function getInitialCustomDates() {
+  const d = new Date()
+  const start = new Date(d.getFullYear(), d.getMonth(), 1)
+  const end = new Date(d)
+  return {
+    from: start.toISOString().split('T')[0],
+    to: end.toISOString().split('T')[0],
+  }
+}
+
+const initCustom = getInitialCustomDates()
+customDateFrom.value = initCustom.from
+customDateTo.value = initCustom.to
+
+const periodLabels: Record<Exclude<ViewPeriod, 'custom'>, string> = {
   year: 'podle roku',
   month: 'podle měsíce',
   week: 'podle týdne',
@@ -29,12 +47,36 @@ const periodLabels: Record<ViewPeriod, string> = {
 
 // Načteme transakce pro zvolené období
 async function loadData() {
-  const { from, to } = usePeriodDates(
-    viewPeriod.value === 'year' ? 'year' : viewPeriod.value === 'month' ? 'month' : 'week',
-    baseDate.value
-  )
-  await store.fetchTransactions(from, to)
+  if (viewPeriod.value === 'custom') {
+    await store.fetchTransactions(customDateFrom.value, customDateTo.value)
+  } else {
+    const { from, to } = usePeriodDates(
+      viewPeriod.value === 'year' ? 'year' : viewPeriod.value === 'month' ? 'month' : 'week',
+      baseDate.value
+    )
+    await store.fetchTransactions(from, to)
+  }
 }
+
+async function selectPeriod(p: ViewPeriod) {
+  if (p === 'custom') {
+    showPeriodModal.value = true
+  } else {
+    viewPeriod.value = p
+    await loadData()
+  }
+}
+
+function onPeriodConfirm(from: string, to: string) {
+  customDateFrom.value = from
+  customDateTo.value = to
+  viewPeriod.value = 'custom'
+  loadData()
+}
+
+watch([customDateFrom, customDateTo], () => {
+  if (viewPeriod.value === 'custom') loadData()
+})
 
 onMounted(loadData)
 
@@ -148,10 +190,6 @@ const totalExpense = computed(() =>
 )
 const balance = computed(() => totalIncome.value - totalExpense.value)
 
-async function changePeriod(p: ViewPeriod) {
-  viewPeriod.value = p
-  await loadData()
-}
 </script>
 
 <template>
@@ -163,11 +201,25 @@ async function changePeriod(p: ViewPeriod) {
         v-for="(label, key) in periodLabels"
         :key="key"
         :class="['filter-btn', { active: viewPeriod === key }]"
-        @click="changePeriod(key as ViewPeriod)"
+        @click="selectPeriod(key as Exclude<ViewPeriod, 'custom'>)"
       >
         {{ label }}
       </button>
+      <button
+        :class="['filter-btn', { active: viewPeriod === 'custom' }]"
+        @click="selectPeriod('custom')"
+      >
+        Doba
+      </button>
     </div>
+
+    <PeriodRangeModal
+      :model-value="showPeriodModal"
+      :date-from="customDateFrom"
+      :date-to="customDateTo"
+      @update:model-value="showPeriodModal = $event"
+      @confirm="onPeriodConfirm"
+    />
 
     <div class="balance-cards">
       <div class="balance-card income">

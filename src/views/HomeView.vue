@@ -1,35 +1,72 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
 import { useFinance, usePeriodDates } from '@/composables/useFinance'
+import { useUIStore } from '@/stores/ui'
 import DonutChart from '@/components/DonutChart.vue'
+import PeriodRangeModal from '@/components/PeriodRangeModal.vue'
 import { CATEGORY_ICON_EMOJI } from '@/types'
 
-type Period = 'day' | 'week' | 'month' | 'year'
+type Period = 'day' | 'week' | 'month' | 'year' | 'custom'
 
-const { transactions, fetchTransactions } = useFinance()
+const { transactions, fetchTransactions, deleteTransaction } = useFinance()
+const uiStore = useUIStore()
 const period = ref<Period>('week')
 const baseDate = ref(new Date())
+const customDateFrom = ref('')
+const customDateTo = ref('')
+const showPeriodModal = ref(false)
 
-const periodLabels: Record<Period, string> = {
+const periodLabels: Record<Exclude<Period, 'custom'>, string> = {
   day: 'Den',
   week: 'Týden',
   month: 'Měsíc',
   year: 'Rok',
 }
 
-const { from, to } = usePeriodDates(period.value, baseDate.value)
+function getInitialCustomDates() {
+  const d = new Date()
+  const start = new Date(d.getFullYear(), d.getMonth(), 1)
+  const end = new Date(d)
+  return {
+    from: start.toISOString().split('T')[0],
+    to: end.toISOString().split('T')[0],
+  }
+}
 
-const dateFrom = ref(from)
-const dateTo = ref(to)
+const initCustom = getInitialCustomDates()
+customDateFrom.value = initCustom.from
+customDateTo.value = initCustom.to
+
+const dateFrom = ref('')
+const dateTo = ref('')
+
+function updateDateRange() {
+  if (period.value === 'custom') {
+    dateFrom.value = customDateFrom.value
+    dateTo.value = customDateTo.value
+  } else {
+    const { from, to } = usePeriodDates(period.value, baseDate.value)
+    dateFrom.value = from
+    dateTo.value = to
+  }
+  fetchTransactions(dateFrom.value, dateTo.value)
+}
 
 watch([period, baseDate], () => {
-  const { from: f, to: t } = usePeriodDates(period.value, baseDate.value)
-  dateFrom.value = f
-  dateTo.value = t
-  fetchTransactions(f, t)
+  if (period.value !== 'custom') {
+    updateDateRange()
+  }
 })
 
-onMounted(() => fetchTransactions(dateFrom.value, dateTo.value))
+watch([customDateFrom, customDateTo], () => {
+  if (period.value === 'custom') {
+    updateDateRange()
+  }
+})
+
+onMounted(() => {
+  updateDateRange()
+})
 
 const type = ref<'income' | 'expense'>('expense')
 
@@ -58,6 +95,7 @@ const total = computed(() =>
 )
 
 function prevPeriod() {
+  if (period.value === 'custom') return
   const d = new Date(baseDate.value)
   if (period.value === 'day') d.setDate(d.getDate() - 1)
   else if (period.value === 'week') d.setDate(d.getDate() - 7)
@@ -67,12 +105,28 @@ function prevPeriod() {
 }
 
 function nextPeriod() {
+  if (period.value === 'custom') return
   const d = new Date(baseDate.value)
   if (period.value === 'day') d.setDate(d.getDate() + 1)
   else if (period.value === 'week') d.setDate(d.getDate() + 7)
   else if (period.value === 'month') d.setMonth(d.getMonth() + 1)
   else d.setFullYear(d.getFullYear() + 1)
   baseDate.value = d
+}
+
+function selectPeriod(p: Period) {
+  if (p === 'custom') {
+    showPeriodModal.value = true
+  } else {
+    period.value = p
+  }
+}
+
+function onPeriodConfirm(from: string, to: string) {
+  customDateFrom.value = from
+  customDateTo.value = to
+  period.value = 'custom'
+  updateDateRange()
 }
 
 const periodLabel = computed(() => {
@@ -84,6 +138,17 @@ const periodLabel = computed(() => {
 function formatDate(s: string) {
   const d = new Date(s)
   return `${d.getDate()}. ${d.getMonth() + 1}.`
+}
+
+const deletingId = ref<string | null>(null)
+async function confirmDelete(t: { id: string }) {
+  if (deletingId.value === t.id) {
+    await deleteTransaction(t.id)
+    deletingId.value = null
+  } else {
+    deletingId.value = t.id
+    setTimeout(() => { deletingId.value = null }, 3000)
+  }
 }
 </script>
 
@@ -105,19 +170,33 @@ function formatDate(s: string) {
     </div>
 
     <div class="period-row">
-      <button class="nav-arrow" @click="prevPeriod">‹</button>
+      <button class="nav-arrow" :disabled="period === 'custom'" @click="prevPeriod">‹</button>
       <div class="period-tabs">
         <button
           v-for="(label, key) in periodLabels"
           :key="key"
           :class="['period-tab', { active: period === key }]"
-          @click="period = key as Period"
+          @click="selectPeriod(key as Exclude<Period, 'custom'>)"
         >
           {{ label }}
         </button>
+        <button
+          :class="['period-tab', { active: period === 'custom' }]"
+          @click="selectPeriod('custom')"
+        >
+          Doba
+        </button>
       </div>
-      <button class="nav-arrow" @click="nextPeriod">›</button>
+      <button class="nav-arrow" :disabled="period === 'custom'" @click="nextPeriod">›</button>
     </div>
+
+    <PeriodRangeModal
+      :model-value="showPeriodModal"
+      :date-from="customDateFrom"
+      :date-to="customDateTo"
+      @update:model-value="showPeriodModal = $event"
+      @confirm="onPeriodConfirm"
+    />
 
     <p class="date-range">{{ periodLabel }}</p>
 
@@ -149,6 +228,18 @@ function formatDate(s: string) {
         <span class="tx-amount" :class="t.type">
           {{ t.type === 'expense' ? '-' : '+' }}{{ Number(t.amount).toLocaleString('cs-CZ') }} Kč
         </span>
+        <div class="tx-actions">
+          <button class="action-btn" @click="uiStore.openEditTransaction(t)" title="Upravit">
+            ✎
+          </button>
+          <button
+            :class="['action-btn', 'delete-btn', { confirm: deletingId === t.id }]"
+            :title="deletingId === t.id ? 'Klikněte znovu pro smazání' : 'Smazat'"
+            @click="confirmDelete(t)"
+          >
+            {{ deletingId === t.id ? '!' : '🗑' }}
+          </button>
+        </div>
       </div>
       <p v-if="!filteredTransactions.length" class="empty-list">
         Žádné transakce v tomto období
@@ -194,6 +285,11 @@ function formatDate(s: string) {
   font-size: 1.5rem;
   color: var(--text-secondary);
   padding: 4px;
+}
+
+.nav-arrow:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .period-tabs {
@@ -269,6 +365,7 @@ function formatDate(s: string) {
   justify-content: center;
   font-size: 1.25rem;
   color: white;
+  flex-shrink: 0;
 }
 
 .tx-info {
@@ -276,6 +373,7 @@ function formatDate(s: string) {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  min-width: 0;
 }
 
 .cat-name {
@@ -290,6 +388,7 @@ function formatDate(s: string) {
 .tx-amount {
   font-weight: 600;
   font-size: 1rem;
+  flex-shrink: 0;
 }
 
 .tx-amount.expense {
@@ -298,6 +397,39 @@ function formatDate(s: string) {
 
 .tx-amount.income {
   color: var(--accent-green);
+}
+
+.tx-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.action-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-size: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.action-btn:hover {
+  color: var(--accent-green);
+  background: var(--bg-card);
+}
+
+.action-btn.delete-btn:hover {
+  color: var(--accent-red);
+}
+
+.action-btn.delete-btn.confirm {
+  background: var(--accent-red);
+  color: white;
 }
 
 .empty-list {

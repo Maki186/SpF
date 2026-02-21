@@ -14,6 +14,10 @@ export function useFinance() {
     fetchAccounts: store.fetchAccounts,
     addTransaction: store.addTransaction,
     addCategory: store.addCategory,
+    updateCategory: store.updateCategory,
+    deleteCategory: store.deleteCategory,
+    updateTransaction: store.updateTransaction,
+    deleteTransaction: store.deleteTransaction,
   }
 }
 

@@ -99,6 +99,64 @@ export const useFinanceStore = defineStore('finance', () => {
     return data
   }
 
+  async function updateCategory(id: string, c: Partial<Pick<Category, 'name' | 'type' | 'icon' | 'color' | 'planned_amount'>>) {
+    if (!userId.value) return
+    const { data, error } = await supabase
+      .from('categories')
+      .update(c)
+      .eq('id', id)
+      .eq('user_id', userId.value)
+      .select()
+      .single()
+
+    if (error) throw error
+    if (data) {
+      const i = categories.value.findIndex((x) => x.id === id)
+      if (i >= 0) categories.value[i] = data
+    }
+    return data
+  }
+
+  async function deleteCategory(id: string) {
+    if (!userId.value) return
+    const { error } = await supabase
+      .from('categories')
+      .delete()
+      .eq('id', id)
+      .eq('user_id', userId.value)
+    if (error) throw error
+    categories.value = categories.value.filter((c) => c.id !== id)
+  }
+
+  async function updateTransaction(id: string, t: Partial<Pick<Transaction, 'amount' | 'category_id' | 'account_id' | 'date' | 'comment' | 'type'>>) {
+    if (!userId.value) return
+    const { data, error } = await supabase
+      .from('transactions')
+      .update({ ...t, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .eq('user_id', userId.value)
+      .select('*, category:categories(*)')
+      .single()
+
+    if (error) throw error
+    if (data) {
+      const i = transactions.value.findIndex((x) => x.id === id)
+      if (i >= 0) transactions.value[i] = data
+    }
+    return data
+  }
+
+  async function deleteTransaction(id: string) {
+    if (!userId.value) return
+    const { error } = await supabase
+      .from('transactions')
+      .delete()
+      .eq('id', id)
+      .eq('user_id', userId.value)
+    if (error) throw error
+    transactions.value = transactions.value.filter((t) => t.id !== id)
+  }
+
   return {
     transactions,
     categories,
@@ -109,5 +167,9 @@ export const useFinanceStore = defineStore('finance', () => {
     fetchAccounts,
     addTransaction,
     addCategory,
+    updateCategory,
+    deleteCategory,
+    updateTransaction,
+    deleteTransaction,
   }
 })

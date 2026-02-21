@@ -35,16 +35,23 @@ export type Period = 'day' | 'week' | 'month' | 'year' | 'custom'
 
 export const CATEGORY_ICONS = [
   'receipt', 'plane', 'tag', 'paw', 'monitor', 'utensils', 'paint-brush',
-  'home', 'tent', 'gamepad', 'car', 'heart', 'book', 'tshirt', 'footprints'
+  'home', 'tent', 'gamepad', 'car', 'heart', 'book', 'tshirt', 'footprints',
+  'train', 'film', 'briefcase', 'shopping-cart', 'coffee', 'utensils-crossed',
+  'baby', 'graduation-cap', 'gift', 'music', 'camera', 'phone', 'tv',
+  'dumbbell', 'tree-palm', 'landmark', 'wallet', 'credit-card', 'piggy-bank',
 ] as const
 
 export const CATEGORY_COLORS = [
-  '#6B7280', '#EF4444', '#14B8A6', '#EC4899', '#3B82F6', '#22C55E', '#DC2626'
+  '#6B7280', '#EF4444', '#14B8A6', '#EC4899', '#3B82F6', '#22C55E', '#DC2626',
+  '#8B5CF6', '#F59E0B', '#06B6D4',
 ]
 
 export const CATEGORY_ICON_EMOJI: Record<string, string> = {
   receipt: '🧾', plane: '✈️', tag: '🏷️', paw: '🐾', monitor: '💻', utensils: '🍽️',
   'paint-brush': '🖌️', home: '🏠', tent: '⛺', gamepad: '🎮', car: '🚗', heart: '❤️',
   book: '📖', tshirt: '👕', footprints: '👟', train: '🚂', film: '🎬', briefcase: '💼',
-  'plus-circle': '➕',
+  'plus-circle': '➕', 'shopping-cart': '🛒', coffee: '☕', 'utensils-crossed': '🍴',
+  baby: '👶', 'graduation-cap': '🎓', gift: '🎁', music: '🎵', camera: '📷', phone: '📱',
+  tv: '📺', dumbbell: '🏋️', 'tree-palm': '🌴', landmark: '🏛️', wallet: '👛',
+  'credit-card': '💳', 'piggy-bank': '🪙',
 }

@@ -1,22 +1,36 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { useFinance } from '@/composables/useFinance'
-import { useUIStore } from '@/stores/ui'
 import { CATEGORY_ICONS, CATEGORY_COLORS, CATEGORY_ICON_EMOJI } from '@/types'
+import type { Category } from '@/types'
 
-const emit = defineEmits<{ close: []; added: [] }>()
-const { addCategory, fetchCategories } = useFinance()
+const props = defineProps<{ category: Category | null }>()
+const emit = defineEmits<{ close: []; updated: []; deleted: [] }>()
 
-const uiStore = useUIStore()
+const { updateCategory, deleteCategory, fetchCategories } = useFinance()
+
 const name = ref('')
-const type = ref<'income' | 'expense'>(uiStore.addCategoryType || 'expense')
+const type = ref<'income' | 'expense'>('expense')
 const icon = ref('receipt')
 const color = ref('#6B7280')
 const plannedAmount = ref('')
 const error = ref('')
 const loading = ref(false)
+const showDeleteConfirm = ref(false)
+
+watch(() => props.category, (cat) => {
+  if (cat) {
+    name.value = cat.name
+    type.value = cat.type
+    icon.value = cat.icon
+    color.value = cat.color
+    plannedAmount.value = cat.planned_amount ? String(cat.planned_amount) : ''
+    showDeleteConfirm.value = false
+  }
+}, { immediate: true })
 
 async function submit() {
+  if (!props.category) return
   if (!name.value.trim()) {
     error.value = 'Zadejte název kategorie'
     return
@@ -24,7 +38,7 @@ async function submit() {
   error.value = ''
   loading.value = true
   try {
-    await addCategory({
+    await updateCategory(props.category.id, {
       name: name.value.trim(),
       type: type.value,
       icon: icon.value,
@@ -32,7 +46,21 @@ async function submit() {
       planned_amount: parseFloat(plannedAmount.value) || 0,
     })
     await fetchCategories()
-    emit('added')
+    emit('updated')
+  } catch (e) {
+    error.value = (e as Error).message
+  } finally {
+    loading.value = false
+  }
+}
+
+async function handleDelete() {
+  if (!props.category) return
+  loading.value = true
+  try {
+    await deleteCategory(props.category.id)
+    await fetchCategories()
+    emit('deleted')
   } catch (e) {
     error.value = (e as Error).message
   } finally {
@@ -42,22 +70,17 @@ async function submit() {
 </script>
 
 <template>
-  <div class="modal-overlay" @click.self="emit('close')">
+  <div v-if="category" class="modal-overlay" @click.self="emit('close')">
     <div class="modal">
       <div class="modal-header">
-        <h2>Vytvořit kategorii</h2>
+        <h2>Upravit kategorii</h2>
         <button class="close-btn" @click="emit('close')" aria-label="Zavřít">×</button>
       </div>
 
       <form @submit.prevent="submit" class="modal-form">
         <div class="field">
           <label>Název kategorie</label>
-          <input
-            v-model="name"
-            type="text"
-            placeholder="Zadejte název kategorie"
-            class="input"
-          />
+          <input v-model="name" type="text" placeholder="Zadejte název kategorie" class="input" />
         </div>
 
         <div class="field">
@@ -112,16 +135,35 @@ async function submit() {
               :style="{ background: c }"
               @click="color = c"
             />
-            <input
-              v-model="color"
-              type="color"
-              class="color-picker"
-            />
+            <input v-model="color" type="color" class="color-picker" />
           </div>
         </div>
 
         <p v-if="error" class="error">{{ error }}</p>
-        <button type="submit" class="btn-primary full">Přidat</button>
+
+        <div class="modal-actions">
+          <button type="submit" class="btn-primary full">Uložit</button>
+          <div v-if="!showDeleteConfirm" class="delete-row">
+            <button
+              type="button"
+              class="btn-delete"
+              @click="showDeleteConfirm = true"
+            >
+              Smazat kategorii
+            </button>
+          </div>
+          <div v-else class="delete-confirm-row">
+            <span class="delete-confirm-text">Opravdu smazat?</span>
+            <div class="delete-buttons">
+              <button type="button" class="btn-secondary" @click="showDeleteConfirm = false">
+                Ne
+              </button>
+              <button type="button" class="btn-delete-confirm" @click="handleDelete">
+                Ano, smazat
+              </button>
+            </div>
+          </div>
+        </div>
       </form>
     </div>
   </div>
@@ -135,7 +177,7 @@ async function submit() {
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  z-index: 300;
+  z-index: 400;
 }
 
 .modal {
@@ -198,10 +240,6 @@ async function submit() {
   color: var(--text-primary);
 }
 
-.radio-label input {
-  accent-color: var(--accent-green);
-}
-
 .icon-grid {
   display: grid;
   grid-template-columns: repeat(6, 1fr);
@@ -215,13 +253,11 @@ async function submit() {
   border-radius: 50%;
   background: var(--bg-card);
   border: 2px solid transparent;
-  font-size: 1.25rem;
-  transition: all 0.2s;
+  font-size: 1.1rem;
 }
 
 .icon-btn.selected {
   border-color: var(--accent-green);
-  background: color-mix(in srgb, var(--accent-green) 20%, var(--bg-card));
 }
 
 .color-grid {
@@ -241,7 +277,6 @@ async function submit() {
 
 .color-btn.selected {
   border-color: white;
-  box-shadow: 0 0 0 2px var(--bg-primary);
 }
 
 .color-picker {
@@ -253,9 +288,41 @@ async function submit() {
   background: none;
 }
 
-.full {
-  width: 100%;
-  margin-top: 16px;
-  padding: 14px;
+.modal-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 24px;
+}
+
+.delete-row {
+  margin-top: 8px;
+}
+
+.btn-delete {
+  color: var(--accent-red);
+  font-size: 0.9rem;
+  padding: 8px 0;
+}
+
+.delete-confirm-row {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.delete-confirm-text {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+
+.delete-buttons {
+  display: flex;
+  gap: 12px;
+}
+
+.btn-delete-confirm {
+  color: var(--accent-red);
+  font-weight: 600;
 }
 </style>

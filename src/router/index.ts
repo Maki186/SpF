@@ -31,6 +31,11 @@ const router = createRouter({
           name: 'grafy',
           component: () => import('@/views/GrafyView.vue'),
         },
+        {
+          path: 'kategorie',
+          name: 'kategorie',
+          component: () => import('@/views/CategoriesView.vue'),
+        },
       ],
     },
   ],
