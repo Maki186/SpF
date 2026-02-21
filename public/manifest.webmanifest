@@ -1,0 +1,19 @@
+{
+  "name": "Správa financí",
+  "short_name": "Finance",
+  "description": "Aplikace pro správu osobních financí",
+  "theme_color": "#1a2f1a",
+  "background_color": "#1a2f1a",
+  "display": "standalone",
+  "orientation": "portrait",
+  "scope": "/",
+  "start_url": "/",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
