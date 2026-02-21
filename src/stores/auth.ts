@@ -22,6 +22,8 @@ export const useAuthStore = defineStore('auth', () => {
   async function signIn(email: string, password: string) {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) throw error
+    // Okamžitě nastavíme user, aby router guard viděl přihlášeného uživatele
+    user.value = data.user
     return data
   }
 
