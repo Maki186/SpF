@@ -3,26 +3,46 @@ import { ref, computed } from 'vue'
 import { supabase } from '@/lib/supabase'
 import type { User } from '@supabase/supabase-js'
 
+let initPromise: Promise<void> | null = null
+let listenerRegistered = false
+
 export const useAuthStore = defineStore('auth', () => {
   const user = ref<User | null>(null)
   const loading = ref(true)
 
   const isAuthenticated = computed(() => !!user.value)
 
-  async function init() {
-    const { data: { session } } = await supabase.auth.getSession()
-    user.value = session?.user ?? null
-    loading.value = false
+  function registerAuthListener() {
+    if (listenerRegistered) return
+    listenerRegistered = true
 
     supabase.auth.onAuthStateChange((_event, session) => {
       user.value = session?.user ?? null
+      loading.value = false
     })
+  }
+
+  async function init() {
+    if (initPromise) return initPromise
+
+    initPromise = (async () => {
+      registerAuthListener()
+
+      const { data: { session }, error } = await supabase.auth.getSession()
+      if (error) {
+        user.value = null
+      } else {
+        user.value = session?.user ?? null
+      }
+      loading.value = false
+    })()
+
+    return initPromise
   }
 
   async function signIn(email: string, password: string) {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) throw error
-    // Okamžitě nastavíme user, aby router guard viděl přihlášeného uživatele
     user.value = data.user
     return data
   }

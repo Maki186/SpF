@@ -1,5 +1,9 @@
 <template>
-  <router-view v-slot="{ Component }">
+  <div v-if="authStore.loading" class="loading-screen">
+    <div class="spinner"></div>
+    <p>Načítání...</p>
+  </div>
+  <router-view v-else v-slot="{ Component }">
     <template v-if="Component">
       <Suspense>
         <component :is="Component" />
@@ -13,6 +17,12 @@
     </template>
   </router-view>
 </template>
+
+<script setup lang="ts">
+import { useAuthStore } from '@/stores/auth'
+
+const authStore = useAuthStore()
+</script>
 
 <style scoped>
 .loading-screen {

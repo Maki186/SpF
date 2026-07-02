@@ -4,7 +4,9 @@ import { useFinance, usePeriodDates } from '@/composables/useFinance'
 import { useUIStore } from '@/stores/ui'
 import DonutChart from '@/components/DonutChart.vue'
 import PeriodRangeModal from '@/components/PeriodRangeModal.vue'
+import { formatPeriodLabel, formatShortDate } from '@/lib/dates'
 import { CATEGORY_ICON_EMOJI } from '@/types'
+import type { Transaction } from '@/types'
 
 type Period = 'day' | 'week' | 'month' | 'year' | 'custom'
 
@@ -15,6 +17,7 @@ const baseDate = ref(new Date())
 const customDateFrom = ref('')
 const customDateTo = ref('')
 const showPeriodModal = ref(false)
+const expandedCategories = ref<Set<string>>(new Set())
 
 const periodLabels: Record<Exclude<Period, 'custom'>, string> = {
   day: 'Den',
@@ -49,6 +52,7 @@ function updateDateRange() {
     dateFrom.value = from
     dateTo.value = to
   }
+  expandedCategories.value = new Set()
   fetchTransactions(dateFrom.value, dateTo.value)
 }
 
@@ -71,27 +75,64 @@ onMounted(() => {
 const type = ref<'income' | 'expense'>('expense')
 
 const filteredTransactions = computed(() =>
-  transactions.value.filter((t: { type: string }) => t.type === type.value)
+  transactions.value.filter((t) => t.type === type.value)
 )
 
-const chartData = computed(() => {
-  const byCategory = new Map<string, { amount: number; color: string }>()
+const shouldGroupByCategory = computed(() => period.value !== 'day')
+
+interface CategoryGroup {
+  key: string
+  name: string
+  icon: string
+  color: string
+  total: number
+  count: number
+  transactions: Transaction[]
+}
+
+const groupedByCategory = computed<CategoryGroup[]>(() => {
+  const map = new Map<string, CategoryGroup>()
+
   for (const t of filteredTransactions.value) {
-    const label = t.category?.name ?? 'Bez kategorie'
-    const color = t.category?.color ?? '#6B7280'
-    const current = byCategory.get(label) ?? { amount: 0, color }
-    current.amount += Number(t.amount)
-    byCategory.set(label, current)
+    const key = t.category_id ?? '__none__'
+    const existing = map.get(key)
+    if (existing) {
+      existing.total += Number(t.amount)
+      existing.count += 1
+      existing.transactions.push(t)
+    } else {
+      map.set(key, {
+        key,
+        name: t.category?.name ?? 'Bez kategorie',
+        icon: t.category?.icon ?? '',
+        color: t.category?.color ?? '#6B7280',
+        total: Number(t.amount),
+        count: 1,
+        transactions: [t],
+      })
+    }
   }
-  return Array.from(byCategory.entries()).map(([label, { amount, color }]) => ({
-    label,
-    amount,
-    color,
-  }))
+
+  return Array.from(map.values())
+    .map((g) => ({
+      ...g,
+      transactions: g.transactions.sort(
+        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+      ),
+    }))
+    .sort((a, b) => b.total - a.total)
 })
 
+const chartData = computed(() =>
+  groupedByCategory.value.map((g) => ({
+    label: g.name,
+    amount: g.total,
+    color: g.color,
+  }))
+)
+
 const total = computed(() =>
-  filteredTransactions.value.reduce((sum: number, t: { amount: number }) => sum + Number(t.amount), 0)
+  filteredTransactions.value.reduce((sum, t) => sum + Number(t.amount), 0)
 )
 
 function prevPeriod() {
@@ -129,15 +170,19 @@ function onPeriodConfirm(from: string, to: string) {
   updateDateRange()
 }
 
-const periodLabel = computed(() => {
-  const a = new Date(dateFrom.value)
-  const b = new Date(dateTo.value)
-  return `${a.getDate()}. ${a.getMonth() + 1}. – ${b.getDate()}. ${b.getMonth() + 1}.`
-})
+const periodLabel = computed(() =>
+  formatPeriodLabel(period.value, dateFrom.value, dateTo.value)
+)
 
-function formatDate(s: string) {
-  const d = new Date(s)
-  return `${d.getDate()}. ${d.getMonth() + 1}.`
+function toggleCategory(key: string) {
+  const next = new Set(expandedCategories.value)
+  if (next.has(key)) next.delete(key)
+  else next.add(key)
+  expandedCategories.value = next
+}
+
+function categoryIcon(icon: string) {
+  return CATEGORY_ICON_EMOJI[icon] || icon?.[0] || '•'
 }
 
 const deletingId = ref<string | null>(null)
@@ -213,34 +258,90 @@ async function confirmDelete(t: { id: string }) {
     </div>
 
     <div class="transaction-list">
-      <div
-        v-for="t in filteredTransactions"
-        :key="t.id"
-        class="transaction-item"
-      >
-        <span class="cat-icon" :style="{ background: t.category?.color || '#6B7280' }">
-          {{ CATEGORY_ICON_EMOJI[t.category?.icon || ''] || (t.category?.icon?.[0] || '•') }}
-        </span>
-        <div class="tx-info">
-          <span class="cat-name">{{ t.category?.name ?? 'Bez kategorie' }}</span>
-          <span class="tx-date">{{ formatDate(t.date) }}</span>
+      <!-- Den: jednotlivé transakce s poznámkou -->
+      <template v-if="!shouldGroupByCategory">
+        <div
+          v-for="t in filteredTransactions"
+          :key="t.id"
+          class="transaction-item"
+        >
+          <span class="cat-icon" :style="{ background: t.category?.color || '#6B7280' }">
+            {{ categoryIcon(t.category?.icon || '') }}
+          </span>
+          <div class="tx-info">
+            <span class="cat-name">{{ t.category?.name ?? 'Bez kategorie' }}</span>
+            <span v-if="t.comment" class="tx-comment">{{ t.comment }}</span>
+            <span class="tx-date">{{ formatShortDate(t.date) }}</span>
+          </div>
+          <span class="tx-amount" :class="t.type">
+            {{ t.type === 'expense' ? '-' : '+' }}{{ Number(t.amount).toLocaleString('cs-CZ') }} Kč
+          </span>
+          <div class="tx-actions">
+            <button class="action-btn" title="Upravit" @click="uiStore.openEditTransaction(t)">✎</button>
+            <button
+              :class="['action-btn', 'delete-btn', { confirm: deletingId === t.id }]"
+              :title="deletingId === t.id ? 'Klikněte znovu pro smazání' : 'Smazat'"
+              @click="confirmDelete(t)"
+            >
+              {{ deletingId === t.id ? '!' : '🗑' }}
+            </button>
+          </div>
         </div>
-        <span class="tx-amount" :class="t.type">
-          {{ t.type === 'expense' ? '-' : '+' }}{{ Number(t.amount).toLocaleString('cs-CZ') }} Kč
-        </span>
-        <div class="tx-actions">
-          <button class="action-btn" @click="uiStore.openEditTransaction(t)" title="Upravit">
-            ✎
-          </button>
+      </template>
+
+      <!-- Týden / měsíc / rok / doba: seskupení podle kategorie -->
+      <template v-else>
+        <div
+          v-for="group in groupedByCategory"
+          :key="group.key"
+          class="category-group"
+        >
           <button
-            :class="['action-btn', 'delete-btn', { confirm: deletingId === t.id }]"
-            :title="deletingId === t.id ? 'Klikněte znovu pro smazání' : 'Smazat'"
-            @click="confirmDelete(t)"
+            class="category-header"
+            :class="{ expanded: expandedCategories.has(group.key) }"
+            @click="toggleCategory(group.key)"
           >
-            {{ deletingId === t.id ? '!' : '🗑' }}
+            <span class="cat-icon" :style="{ background: group.color }">
+              {{ categoryIcon(group.icon) }}
+            </span>
+            <div class="tx-info">
+              <span class="cat-name">{{ group.name }}</span>
+              <span class="tx-meta">{{ group.count }}× platba</span>
+            </div>
+            <span class="tx-amount" :class="type">
+              {{ type === 'expense' ? '-' : '+' }}{{ group.total.toLocaleString('cs-CZ') }} Kč
+            </span>
+            <span class="expand-icon">{{ expandedCategories.has(group.key) ? '▾' : '▸' }}</span>
           </button>
+
+          <div v-if="expandedCategories.has(group.key)" class="category-details">
+            <div
+              v-for="t in group.transactions"
+              :key="t.id"
+              class="transaction-item nested"
+            >
+              <div class="tx-info">
+                <span class="tx-date">{{ formatShortDate(t.date) }}</span>
+                <span v-if="t.comment" class="tx-comment">{{ t.comment }}</span>
+              </div>
+              <span class="tx-amount" :class="t.type">
+                {{ t.type === 'expense' ? '-' : '+' }}{{ Number(t.amount).toLocaleString('cs-CZ') }} Kč
+              </span>
+              <div class="tx-actions">
+                <button class="action-btn" title="Upravit" @click="uiStore.openEditTransaction(t)">✎</button>
+                <button
+                  :class="['action-btn', 'delete-btn', { confirm: deletingId === t.id }]"
+                  :title="deletingId === t.id ? 'Klikněte znovu pro smazání' : 'Smazat'"
+                  @click="confirmDelete(t)"
+                >
+                  {{ deletingId === t.id ? '!' : '🗑' }}
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
-      </div>
+      </template>
+
       <p v-if="!filteredTransactions.length" class="empty-list">
         Žádné transakce v tomto období
       </p>
@@ -346,6 +447,37 @@ async function confirmDelete(t: { id: string }) {
   gap: 12px;
 }
 
+.category-group {
+  background: var(--bg-card);
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.category-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 14px 16px;
+  text-align: left;
+  color: var(--text-primary);
+  transition: background 0.2s;
+}
+
+.category-header:hover {
+  background: var(--bg-secondary);
+}
+
+.category-header.expanded {
+  border-bottom: 1px solid var(--border);
+}
+
+.category-details {
+  display: flex;
+  flex-direction: column;
+}
+
 .transaction-item {
   display: flex;
   align-items: center;
@@ -354,6 +486,18 @@ async function confirmDelete(t: { id: string }) {
   background: var(--bg-card);
   border-radius: 12px;
   border: 1px solid var(--border);
+}
+
+.transaction-item.nested {
+  border: none;
+  border-radius: 0;
+  background: var(--bg-secondary);
+  padding: 12px 16px 12px 72px;
+  border-bottom: 1px solid var(--border);
+}
+
+.transaction-item.nested:last-child {
+  border-bottom: none;
 }
 
 .cat-icon {
@@ -380,6 +524,26 @@ async function confirmDelete(t: { id: string }) {
   font-weight: 500;
 }
 
+.tx-meta {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.tx-comment {
+  font-size: 0.85rem;
+  color: var(--text-primary);
+  opacity: 0.85;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tx-comment.muted {
+  color: var(--text-secondary);
+  opacity: 0.6;
+  font-style: italic;
+}
+
 .tx-date {
   font-size: 0.8rem;
   color: var(--text-secondary);
@@ -397,6 +561,14 @@ async function confirmDelete(t: { id: string }) {
 
 .tx-amount.income {
   color: var(--accent-green);
+}
+
+.expand-icon {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+  width: 20px;
+  text-align: center;
 }
 
 .tx-actions {

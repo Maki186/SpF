@@ -8,6 +8,7 @@ const authStore = useAuthStore()
 
 const email = ref('')
 const password = ref('')
+const showPassword = ref(false)
 const error = ref('')
 const loading = ref(false)
 
@@ -47,14 +48,24 @@ async function handleLogin() {
         </div>
         <div class="field">
           <label for="password">Heslo</label>
-          <input
-            id="password"
-            v-model="password"
-            type="password"
-            required
-            placeholder="••••••••"
-            autocomplete="current-password"
-          />
+          <div class="password-input-wrap">
+            <input
+              id="password"
+              v-model="password"
+              :type="showPassword ? 'text' : 'password'"
+              required
+              placeholder="••••••••"
+              autocomplete="current-password"
+            />
+            <button
+              type="button"
+              class="toggle-password"
+              :aria-label="showPassword ? 'Skrýt heslo' : 'Zobrazit heslo'"
+              @click="showPassword = !showPassword"
+            >
+              {{ showPassword ? '🫣' : '👁' }}
+            </button>
+          </div>
         </div>
         <p v-if="error" class="error">{{ error }}</p>
         <button type="submit" class="btn-primary full" :disabled="loading">
@@ -125,6 +136,29 @@ h1 {
   border-radius: 10px;
   color: var(--text-primary);
   font-size: 1rem;
+}
+
+.password-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.password-input-wrap input {
+  padding-right: 48px;
+}
+
+.toggle-password {
+  position: absolute;
+  right: 12px;
+  font-size: 1.1rem;
+  color: var(--text-secondary);
+  padding: 4px;
+  line-height: 1;
+}
+
+.toggle-password:hover {
+  color: var(--text-primary);
 }
 
 .field input:focus {
