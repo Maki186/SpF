@@ -2,6 +2,24 @@
 
 Aplikace pro správu osobních financí vyvinutá ve Vue.js 3 s integrací Supabase.
 
+## Náhledy
+
+### Desktop
+
+![Přehled aplikace na počítači](screenshots/overview_desktop.png)
+
+### Mobil
+
+<p align="center">
+  <img src="screenshots/overview_mobile.png" width="260" alt="Přehled na mobilu" />
+  <img src="screenshots/add_payment_mobile.png" width="260" alt="Přidání platby" />
+  <img src="screenshots/graph_mobile.png" width="260" alt="Grafy na mobilu" />
+</p>
+
+<p align="center">
+  <em>Přehled · Přidání platby · Grafy</em>
+</p>
+
 ## Funkce
 
 - **Registrace a přihlášení** – autentizace pomocí emailu a hesla
