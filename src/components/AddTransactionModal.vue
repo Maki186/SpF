@@ -3,6 +3,7 @@ import { ref, computed, watch } from 'vue'
 import { useFinance } from '@/composables/useFinance'
 import { useUIStore } from '@/stores/ui'
 import { CATEGORY_ICON_EMOJI } from '@/types'
+import { parsePositiveAmount } from '@/lib/validation'
 
 const emit = defineEmits<{ close: []; added: [] }>()
 const { addTransaction, fetchCategories, fetchAccounts, categories, accounts } = useFinance()
@@ -37,9 +38,9 @@ async function init() {
 init()
 
 async function submit() {
-  const num = parseFloat(amount.value.replace(/\s/g, '').replace(',', '.'))
-  if (isNaN(num) || num <= 0) {
-    error.value = 'Zadejte platnou částku'
+  const num = parsePositiveAmount(amount.value)
+  if (num === null) {
+    error.value = 'Zadejte platnou kladnou částku'
     return
   }
   error.value = ''

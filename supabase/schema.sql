@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS categories (
   type TEXT NOT NULL CHECK (type IN ('income', 'expense')),
   icon TEXT DEFAULT 'receipt',
   color TEXT DEFAULT '#6B7280',
-  planned_amount NUMERIC DEFAULT 0,
+  planned_amount NUMERIC DEFAULT 0 CHECK (planned_amount >= 0),
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS transactions (
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   account_id UUID REFERENCES accounts(id) ON DELETE SET NULL,
   category_id UUID REFERENCES categories(id) ON DELETE SET NULL,
-  amount NUMERIC NOT NULL,
+  amount NUMERIC NOT NULL CHECK (amount > 0),
   type TEXT NOT NULL CHECK (type IN ('income', 'expense')),
   date DATE NOT NULL,
   comment TEXT,
@@ -59,11 +59,29 @@ CREATE POLICY "Users can manage own accounts"
   USING (auth.uid() = user_id)
   WITH CHECK (auth.uid() = user_id);
 
--- RLS policies - transakce
+-- RLS policies - transakce (včetně validace vlastnictví účtu a kategorie)
 CREATE POLICY "Users can manage own transactions"
   ON transactions FOR ALL
   USING (auth.uid() = user_id)
-  WITH CHECK (auth.uid() = user_id);
+  WITH CHECK (
+    auth.uid() = user_id
+    AND (
+      account_id IS NULL
+      OR EXISTS (
+        SELECT 1 FROM accounts
+        WHERE accounts.id = transactions.account_id
+          AND accounts.user_id = auth.uid()
+      )
+    )
+    AND (
+      category_id IS NULL
+      OR EXISTS (
+        SELECT 1 FROM categories
+        WHERE categories.id = transactions.category_id
+          AND categories.user_id = auth.uid()
+      )
+    )
+  );
 
 -- Automatické vytvoření hlavního účtu při registraci
 CREATE OR REPLACE FUNCTION public.handle_new_user()

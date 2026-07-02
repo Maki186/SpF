@@ -21,7 +21,8 @@ npm install
 
 1. Vytvořte projekt na [supabase.com](https://supabase.com)
 2. V **SQL Editoru** v Supabase Dashboard spusťte celý skript ze souboru `supabase/schema.sql`
-3. Zkopírujte `.env.example` na `.env` a vyplňte své hodnoty:
+3. Pokud už databázi máte, spusťte navíc migraci `supabase/migrations/001_security_hardening.sql`
+4. Zkopírujte `.env.example` na `.env` a vyplňte své hodnoty:
    - `VITE_SUPABASE_URL` – URL vašeho projektu (najdete v Project Settings → API)
    - `VITE_SUPABASE_ANON_KEY` – anonymní (anon) klíč (Project Settings → API)
 

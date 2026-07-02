@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { isStrongEnoughPassword } from '@/lib/validation'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -20,8 +21,8 @@ async function handleRegister() {
     error.value = 'Hesla se neshodují'
     return
   }
-  if (password.value.length < 6) {
-    error.value = 'Heslo musí mít alespoň 6 znaků'
+  if (!isStrongEnoughPassword(password.value)) {
+    error.value = 'Heslo musí mít alespoň 8 znaků'
     return
   }
   loading.value = true
@@ -56,7 +57,7 @@ async function handleRegister() {
           />
         </div>
         <div class="field">
-          <label for="password">Heslo (min. 6 znaků)</label>
+          <label for="password">Heslo (min. 8 znaků)</label>
           <input
             id="password"
             v-model="password"

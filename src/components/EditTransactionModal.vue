@@ -4,6 +4,7 @@ import { useFinance } from '@/composables/useFinance'
 import { useUIStore } from '@/stores/ui'
 import { CATEGORY_ICON_EMOJI } from '@/types'
 import type { Transaction } from '@/types'
+import { parsePositiveAmount } from '@/lib/validation'
 
 const props = defineProps<{ transaction: Transaction | null }>()
 const emit = defineEmits<{ close: []; updated: [] }>()
@@ -44,9 +45,9 @@ watch(type, () => {
 
 async function submit() {
   if (!props.transaction) return
-  const num = parseFloat(amount.value.replace(/\s/g, '').replace(',', '.'))
-  if (isNaN(num) || num <= 0) {
-    error.value = 'Zadejte platnou částku'
+  const num = parsePositiveAmount(amount.value)
+  if (num === null) {
+    error.value = 'Zadejte platnou kladnou částku'
     return
   }
   error.value = ''
