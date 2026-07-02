@@ -21,6 +21,8 @@ export function useFinance() {
   }
 }
 
+import { formatDateISO } from '@/lib/dates'
+
 export function usePeriodDates(period: 'day' | 'week' | 'month' | 'year', baseDate: Date) {
   let from: Date
   let to: Date
@@ -57,7 +59,7 @@ export function usePeriodDates(period: 'day' | 'week' | 'month' | 'year', baseDa
   }
 
   return {
-    from: from.toISOString().split('T')[0],
-    to: to.toISOString().split('T')[0],
+    from: formatDateISO(from),
+    to: formatDateISO(to),
   }
 }
